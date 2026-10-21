@@ -3,6 +3,7 @@ package dev.hanvon.ink
 import android.content.Context
 import android.graphics.Point
 import android.graphics.Rect
+import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -17,6 +18,8 @@ interface InkListener {
     fun onNativePacket(packet: NativePacket) {}
     /** View-local pixels; packet semantics, not a guaranteed unique stroke. */
     fun onRenderedPacket(stroke: RenderedStroke, arrivalNanos: Long) {}
+    /** Coordinate geometry changed; discard any host capture tied to the previous mapping. */
+    fun onGeometryChanged() {}
     fun onDiagnostic(operation: String, detail: String, elapsedNanos: Long) {}
 }
 
@@ -45,10 +48,20 @@ class InkSession internal constructor(private val view: View, val config: InkCon
     @Volatile private var foreground = false
     @Volatile private var epoch = 0L
     private var hostResumed = false
-    private var blocked = false
+    @Volatile private var blocked = false
+    @Volatile private var redrawAllowed = false
     private var localArea: InkRect? = null
     private var exclusion: InkRect? = null
     private var geometry: String? = null
+    private var coordinateGeometry: String? = null
+    private val displays = view.context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayRemoved(displayId: Int) { update() }
+        override fun onDisplayChanged(displayId: Int) {
+            if (view.display?.displayId == displayId) { update(); view.invalidate() }
+        }
+    }
     private var retainingStroke = false
     var state = SessionState.INITIALIZING; private set
     var coordinateMap: CoordinateMap? = null; private set
@@ -86,6 +99,7 @@ class InkSession internal constructor(private val view: View, val config: InkCon
         }
     }
     internal fun start() {
+        displays?.registerDisplayListener(displayListener, ui)
         view.addOnLayoutChangeListener(layoutListener)
         view.addOnAttachStateChangeListener(attachListener)
         view.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
@@ -95,8 +109,8 @@ class InkSession internal constructor(private val view: View, val config: InkCon
             core.open { flag, arrival, values ->
                 if (!closed && !failed) {
                     try {
-                        val packet = NativePacket.parse(flag, arrival, values)
                         val callbackEpoch = epoch
+                        val packet = NativePacket.parse(flag, arrival, values)
                         ui.post { if (!closed && !failed && foreground && epoch == callbackEpoch) {
                             listener.onNativePacket(packet)
                             val map = coordinateMap
@@ -133,6 +147,8 @@ class InkSession internal constructor(private val view: View, val config: InkCon
     private fun update() {
         mainThread()
         if (closed || failed) return
+        val canRedraw = hostResumed && view.isAttachedToWindow && view.hasWindowFocus() && view.isShown
+        if (redrawAllowed != canRedraw) { redrawAllowed = canRedraw; epoch++ }
         val active = hostResumed && !blocked && view.isAttachedToWindow && view.hasWindowFocus() &&
             view.isShown && view.width > 0 && view.height > 0
         val visible = Rect()
@@ -147,6 +163,14 @@ class InkSession internal constructor(private val view: View, val config: InkCon
         val size = Point(); display.getRealSize(size)
         val map = CoordinateMap(capability.origin!!, display.rotation, size.x.toFloat(), size.y.toFloat())
         val pos = IntArray(2); view.getLocationOnScreen(pos)
+        val coordinateKey = "${display.rotation}:${size.x}:${size.y}:${pos[0]}:${pos[1]}:${view.width}:${view.height}"
+        if (coordinateGeometry != coordinateKey) {
+            val changed = coordinateGeometry != null
+            coordinateGeometry = coordinateKey
+            if (changed) ui.post {
+                if (!closed && !failed && coordinateGeometry == coordinateKey) listener.onGeometryChanged()
+            }
+        }
         visible.offset(pos[0], pos[1])
         val bounds = localArea ?: InkRect(0f, 0f, view.width.toFloat(), view.height.toFloat())
         require(bounds.left >= 0 && bounds.top >= 0 && bounds.right <= view.width && bounds.bottom <= view.height)
@@ -203,7 +227,9 @@ class InkSession internal constructor(private val view: View, val config: InkCon
         mainThread()
         if (closed || failed || !foreground || token < 0) return
         handoff.frame(token)
-        val delay = handoff.delay(token, SystemClock.uptimeMillis(), config.settlingMillis) ?: return
+        val delay = handoff.delay(token, SystemClock.uptimeMillis(), config.settlingMillis)
+        diagnostic("retainedFrame", "token=$token current=${handoff.sequence} delay=$delay")
+        if (delay == null) return
         ui.postDelayed({
             if (!foreground || closed || failed) return@postDelayed
             task("clearPreview", {
@@ -211,11 +237,42 @@ class InkSession internal constructor(private val view: View, val config: InkCon
             }) { core.clearPreview(); handoff.cleared(token) }
         }, delay)
     }
+    /**
+     * Clear this foreground owner's old preview after an edited retained frame has been submitted.
+     * Suspend drawing before editing and keep it suspended until completion. Unlike a stroke handoff,
+     * this also covers erase, selection and viewport changes, which have no native stroke token.
+     * A late frame after resume, focus loss or close never resets the global firmware buffer.
+     * [completed] receives false if ownership changed before the reset could run.
+     */
+    fun notifyRetainedRedrawCommitted(completed: (Boolean) -> Unit) {
+        mainThread()
+        val revision = epoch
+        fun eligible() = !closed && !failed && blocked && hostResumed &&
+            view.isAttachedToWindow && view.hasWindowFocus() && view.isShown
+        if (!eligible()) { completed(false); return }
+        HanvonInk.worker.execute {
+            var cleared = false
+            try {
+                // View properties are checked on the main thread; epoch/blocked guard worker ownership.
+                if (!closed && !failed && blocked && redrawAllowed && epoch == revision) {
+                    core.clearPreview(); cleared = true
+                    diagnostic("clearEditedPreview", "retained redraw submitted")
+                }
+            } catch (e: Throwable) {
+                failed = true; foreground = false; epoch++; handoff.invalidate()
+                val cleanup = core.close()
+                diagnostic("clearEditedPreview", "${e.javaClass.simpleName}: ${e.message}; cleanup failures=$cleanup")
+                state(SessionState.FAILED, "Edited preview cleanup failed: ${e.message}")
+            }
+            ui.post { completed(cleared && eligible() && epoch == revision) }
+        }
+    }
     override fun close() {
         mainThread()
         if (closed) return
         closed = true; foreground = false; epoch++; handoff.invalidate()
         ui.removeCallbacksAndMessages(null)
+        displays?.unregisterDisplayListener(displayListener)
         view.removeOnLayoutChangeListener(layoutListener)
         view.removeOnAttachStateChangeListener(attachListener)
         if (view.viewTreeObserver.isAlive) {

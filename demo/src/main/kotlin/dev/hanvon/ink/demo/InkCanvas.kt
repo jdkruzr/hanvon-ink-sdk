@@ -2,7 +2,6 @@ package dev.hanvon.ink.demo
 
 import android.content.Context
 import android.graphics.*
-import android.os.Build
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
@@ -128,14 +127,11 @@ class InkCanvas(context: Context, private val recording: Recording) : View(conte
         if (pendingFrame) {
             pendingFrame = false
             val token = pendingToken; val owner = frameSession
-            val frame = {
+            RetainedFrame.afterDraw(this, canvas) { signal ->
                 recording.event("retainedFrame", JSONObject().put("token", token).put("drawToFrameSignalNanos", SystemClock.elapsedRealtimeNanos() - started)
-                    .put("signal", if (Build.VERSION.SDK_INT >= 29 && isHardwareAccelerated) "frameCommitCallback" else "postDrawApproximation"))
-                post { if (session === owner) owner?.notifyFrameCommitted(token) }
-                Unit
+                    .put("signal", signal.name))
+                if (session === owner) owner?.notifyFrameCommitted(token)
             }
-            if (Build.VERSION.SDK_INT >= 29 && isHardwareAccelerated) viewTreeObserver.registerFrameCommitCallback(frame)
-            else post { frame() }
         }
     }
     override fun onTouchEvent(event: MotionEvent): Boolean {

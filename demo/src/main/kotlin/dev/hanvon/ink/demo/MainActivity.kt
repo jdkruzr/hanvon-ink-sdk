@@ -144,6 +144,9 @@ class MainActivity : Activity() {
                 override fun onRenderedPacket(stroke: RenderedStroke, arrivalNanos: Long) {
                     if (generation == thisGeneration) canvas.receiveNative(stroke, arrivalNanos)
                 }
+                override fun onGeometryChanged() {
+                    if (generation == thisGeneration) canvas.cancelStroke()
+                }
                 override fun onNativePacket(packet: NativePacket) {
                     if (generation != thisGeneration) return
                     recording.packetCount.incrementAndGet()

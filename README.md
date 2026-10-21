@@ -6,9 +6,9 @@ A small Android library that attaches Hanvon native ink preview to an existing V
 
 There is no M10 model-name gate. Matching framework APIs and a recognized coordinate origin enable native preview automatically on other devices; availability is distinct from device validation.
 
-## 0.2 development
+## 0.2 release candidate
 
-Native pressure configuration, immutable reported-width samples, optional retained rendering, conservative stroke association, input-clock conversion and source-aware button signals are implemented. The [pressure experiment](docs/pressure-session-20261021.md) passed 20/20 native stroke associations on the M10. Ink Notes integration is being validated separately; see the [implementation checklist](docs/implementation-plan.md). This is not a final 0.2 release claim.
+Native pressure configuration, immutable reported-width samples, optional retained rendering, conservative stroke association, input-clock conversion and source-aware button signals are implemented. The [pressure experiment](docs/pressure-session-20261021.md) passed 20/20 native stroke associations on the M10. The editor retest passed bottom/rear erase, lasso/move, pen triple-tap zoom, top pan and return to writing. Candidate `0.2.0-rc1` is built locally; PDF-on-device and final lifecycle acceptance remain pending; see the [implementation checklist](docs/implementation-plan.md). This is not a final 0.2 release claim.
 
 The pressure comparison is a fifth lab mode. It retains native diameters when association succeeds and preserves Android provisional ink on explicit fallback. The first four comparison modes remain available.
 
@@ -82,3 +82,7 @@ The bridge uses public reflection entry points to call vendor framework methods 
 ABI, constants, and coordinate conventions were recovered from the local M10 capture in `../penstar_re`: `HvPenDrawManager`, `HvPenDrawService`, the patched framework `View` third-party hook, and stock Notes `HandView`/`MemoView`. The patched View's mode-3 path supplies the starting preview behavior; its one-second reset delay is experimental here too.
 
 No public API stability or other-device compatibility is promised yet. Advanced brushes, erasing, undo/redo, transformed Views, multiwindow native drawing, Ink Notes integration, and SDK publication are outside this milestone.
+
+## License
+
+MIT; see [LICENSE](LICENSE). The implementation contains no redistributed vendor binaries.

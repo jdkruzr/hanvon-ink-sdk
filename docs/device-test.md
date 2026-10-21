@@ -2,7 +2,7 @@
 
 **Coordinate with the observer first.** Give a heads-up, wait until they confirm they are watching, then stage the app and explain the next short action. Do not start a timed capture before that acknowledgement. The demo records continuously and its counters show immediately whether events arrive.
 
-The user deferred further M10 testing on 2026-10-20. Do not resume device UI changes simply because the implementation is ready.
+The latest session completed pressure and editor-tool checks on October 21. The user then went to bed before PDF testing; do not resume device UI changes until they are watching again. Follow [the current handoff](session-handoff-20261021.md) rather than repeating completed experiments.
 
 ## Setup and lifecycle check
 

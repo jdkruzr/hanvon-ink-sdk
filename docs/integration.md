@@ -8,7 +8,7 @@
 
 Only one attached SDK session is allowed per process. Close the old session before attaching another. Queued teardown precedes the next initialization. Different apps can still use the global vendor service; this library cannot provide a cross-process lock.
 
-The host retains its own Canvas/bitmap/document. Native preview never becomes the sole copy of the user's strokes. The demo uses MotionEvents as the authoritative retained source in both native modes. If a firmware suppresses these events, that mode is unsuitable for this host contract; use the counters and recording to diagnose it rather than claiming successful retention.
+The host retains its own Canvas/bitmap/document. Native preview never becomes the sole copy of the user's strokes. The demo retains MotionEvents provisionally; the pressure mode may replace them with conservatively associated native-width samples. If a firmware suppresses these events, that mode is unsuitable for this host contract; use the counters and recording to diagnose it rather than claiming successful retention.
 
 ## Minimal wiring
 
@@ -42,10 +42,10 @@ The frame-commit API needs an API-29 check and hardware acceleration. The demo r
 ## Geometry and configuration
 
 - `setBounds(areaInView, excludedInView)` takes pixel coordinates local to the attached View, not dp or document coordinates. Null area means the entire View; null exclusion means no exclusion. One exclusion rectangle is supported by this ABI.
-- The adapter adds the View's screen position and clips drawing bounds to its visible rectangle. Layout, scrolling, and focus changes recompute geometry. Bounds must remain within the View.
+- The adapter adds the View's screen position and clips drawing bounds to its visible rectangle. Layout, scrolling, focus and display changes (including 180-degree rotation) recompute geometry. `onGeometryChanged()` tells the host to invalidate capture associated with the old coordinate mapping. Bounds must remain within the View.
 - Origin 0/1/2 conventions and all four display rotations use recovered axis swaps/reflections. Dimensions come from the active display. Model names are informational only.
 - Only axis-aligned, untransformed Views are supported in this prototype. Suspend native drawing during host animations, scale transforms, zoom/pan, or other geometry changes outside the supported contract.
-- `setWidth(1..64)` uses native display pixels. Black style 15 is fixed for now. As of v0.1.1, `InkConfig` defaults to continuously enabled mode 0 (`NATIVE_CALLBACK`), the working M10 baseline. Mode 3 (`NATIVE_PREVIEW`) remains an explicit experimental choice. The settling delay is 0–5000 ms (default 1000).
+- `setWidth(1..64)` uses native display pixels. Native brush selection supports fixed pencil style 15 and pressure style 6. As of v0.1.1, `InkConfig` defaults to continuously enabled mode 0 (`NATIVE_CALLBACK`), the working M10 baseline. Mode 3 (`NATIVE_PREVIEW`) remains an explicit experimental choice. The settling delay is 0–5000 ms (default 1000).
 
 ## Session states and handoff
 
@@ -84,6 +84,12 @@ The matcher checks the native packet's event-time window, start/end positions an
 `PenInput.classify(toolType, buttons, source)` returns signals rather than assigning app tools. Bits 32/64/128 are independent; legacy tool 6 maps to primary. Rear eraser is explicit. Finger tool from a stylus source is `PEN_AS_FINGER`; other finger input remains `FINGER`. Do not infer button identity from finger tool alone. The SDK does not mutate firmware button settings.
 
 Applications must explicitly suspend continuously enabled mode 0 for unsupported tools, same-window occlusion and editing gestures; `observe(retainStroke=false)` alone does not turn off mode 0. Retain a session-specific frame token, invalidate stale work on document/geometry changes, and forward stroke termination even on cancellation. SDK callbacks and state notifications do not own your document's undo transaction.
+
+### Editing a retained page
+
+A stroke-token acknowledgement cannot clean up an erase, lasso, undo or pan: those operations may deliberately invalidate the last stroke token. Suspend native drawing, retain pending input, perform the edit, and submit the edited Android frame. Then call `notifyRetainedRedrawCommitted { cleared -> ... }` while still suspended. Resume only after completion and after rechecking host tool/window eligibility. This resets the old preview only while this session still owns a visible foreground surface. A frame arriving after resume, focus loss or close is rejected. It never resets during teardown. The alpha06 editor retest confirmed visible erase and selection/pan recovery on the M10. Candidate-specific lifecycle testing remains pending.
+
+`RetainedFrame.afterDraw(view, canvas) { signal -> ... }` provides the shared frame-submission helper used by both consumers. Call it once inside `onDraw` after painting retained ink; capture and validate the session/token or edit revision in the callback. It uses hardware frame completion where available and labels software post-draw approximation separately. It explicitly schedules a subsequent frame because onDraw may run after callback collection; an idle view must not strand preview cleanup. Ignore rejected palm events completely; they must not suspend the session or invalidate a valid stroke handoff.
 
 ### Packaging
 
