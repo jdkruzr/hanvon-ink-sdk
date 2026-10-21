@@ -59,7 +59,7 @@ class MainActivity : Activity() {
         root.addView(modes)
         val row = LinearLayout(this)
         fun button(text: String, action: () -> Unit) { row.addView(Button(this).apply { this.text = text; setOnClickListener { action() } }, LinearLayout.LayoutParams(0, 56.dp, 1f)) }
-        button("Clear") { stopSession(); canvas.clear(); startSession(); recording.event("clearCanvas") }
+        button("Clear") { canvas.clear(); recording.event("clearCanvas") }
         button("Rotate") {
             requestedOrientation = if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT)
                 ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -145,7 +145,7 @@ class MainActivity : Activity() {
                     if (generation == thisGeneration) canvas.receiveNative(stroke, arrivalNanos)
                 }
                 override fun onGeometryChanged() {
-                    if (generation == thisGeneration) canvas.cancelStroke()
+                    if (generation == thisGeneration) { canvas.cancelStroke(); canvas.redrawNativeEdit() }
                 }
                 override fun onNativePacket(packet: NativePacket) {
                     if (generation != thisGeneration) return

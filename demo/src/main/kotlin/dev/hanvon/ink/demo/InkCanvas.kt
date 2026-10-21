@@ -23,13 +23,17 @@ class InkCanvas(context: Context, private val recording: Recording) : View(conte
     private var transaction = 0L
     private var capturing = false
     private val finishCapture = Runnable {
-        capture.finish(SystemClock.elapsedRealtimeNanos()).forEach { result ->
+        val results = capture.finish(SystemClock.elapsedRealtimeNanos())
+        if (results.isEmpty()) return@Runnable
+        var clearPreview = false
+        results.forEach { result ->
+            if (result.stroke == null || result.id !in captured) clearPreview = true
             captured.remove(result.id)?.let { stroke ->
                 result.stroke?.let { stroke.nativeInk = it.transformed(1f / scale, -offsetX / scale, -offsetY / scale) }
                 recording.event("nativeAssociation", JSONObject().put("id", result.id).put("accepted", result.stroke != null).put("reason", result.reason))
             }
         }
-        rebuild(); save(); scheduleFrame(pendingToken)
+        rebuild(); save(); scheduleFrame(pendingToken, clearPreview)
     }
     var widthPx = 4
     var exclusionEnabled = false
@@ -46,8 +50,12 @@ class InkCanvas(context: Context, private val recording: Recording) : View(conte
     private var docH = 0f
     private var callbackPoints = emptyList<InkPoint>()
     private var pendingFrame = false
+    private var pendingClearPreview = true
     private var pendingToken = -1L
     private var frameSession: InkSession? = null
+    private var editRevision = 0L
+    private var pendingEdit: InkSession? = null
+    private var resumeAfterStroke: InkSession? = null
     var strokeCount: Int = 0; private set
     var onStroke: (() -> Unit)? = null
     private val scale get() = if (docW > 0 && docH > 0) min(width / docW, height / docH) else 1f
@@ -88,7 +96,17 @@ class InkCanvas(context: Context, private val recording: Recording) : View(conte
     }
     private fun exclusionRect(): InkRect? = if (exclusionEnabled && width > 0 && height > 0)
         InkRect(width * .4f, height * .4f, width * .6f, height * .6f) else null
-    fun updateExclusion() { session?.setBounds(excludedInView = exclusionRect()) }
+    fun updateExclusion() {
+        session?.suspendDrawing()
+        session?.setBounds(excludedInView = exclusionRect())
+        redrawNativeEdit()
+    }
+    /** Retained edits clear preview while this foreground owner remains suspended. */
+    fun redrawNativeEdit() {
+        val owner = session ?: return
+        owner.suspendDrawing(); editRevision++; pendingEdit = owner
+        rebuild(); invalidate()
+    }
     private fun inExclusion(x: Float, y: Float): Boolean {
         val r = exclusionRect() ?: return false
         return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
@@ -127,10 +145,22 @@ class InkCanvas(context: Context, private val recording: Recording) : View(conte
         if (pendingFrame) {
             pendingFrame = false
             val token = pendingToken; val owner = frameSession
+            val clearPreview = pendingClearPreview
             RetainedFrame.afterDraw(this, canvas) { signal ->
                 recording.event("retainedFrame", JSONObject().put("token", token).put("drawToFrameSignalNanos", SystemClock.elapsedRealtimeNanos() - started)
                     .put("signal", signal.name))
-                if (session === owner) owner?.notifyFrameCommitted(token)
+                if (session === owner) owner?.notifyFrameCommitted(token, clearPreview)
+            }
+        }
+        pendingEdit?.let { owner ->
+            pendingEdit = null
+            val revision = editRevision
+            RetainedFrame.afterDraw(this, canvas) {
+                if (session === owner && revision == editRevision) owner.notifyRetainedRedrawCommitted {
+                    if (session === owner && revision == editRevision) {
+                        if (current == null) owner.resumeDrawing() else resumeAfterStroke = owner
+                    }
+                }
             }
         }
     }
@@ -145,11 +175,12 @@ class InkCanvas(context: Context, private val recording: Recording) : View(conte
         }
         val drawingTool = tool == MotionEvent.TOOL_TYPE_STYLUS || tool == MotionEvent.TOOL_TYPE_UNKNOWN || tool == 6
         val token = session?.observe(event, drawingTool && !inExclusion(event.x, event.y)) ?: -1
+        val nativeCaptureEvent = capturing || (event.actionMasked == MotionEvent.ACTION_DOWN && pressureMode && token >= 0)
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 parent.requestDisallowInterceptTouchEvent(true)
                 current = if (drawingTool && !inExclusion(event.x, event.y)) Stroke(widthPx / scale, mutableListOf()) else null
-                capturing = pressureMode && session != null && current != null
+                capturing = pressureMode && token >= 0 && current != null
                 if (capturing) {
                     removeCallbacks(finishCapture); transaction++
                     capturing = capture.begin(transaction, InputClock.eventNanos(event), InkPoint(event.x, event.y))
@@ -178,11 +209,17 @@ class InkCanvas(context: Context, private val recording: Recording) : View(conte
                     if (captured.isNotEmpty()) postDelayed(finishCapture, 1050)
                 }
                 capturing = false
+                resumeAfterStroke?.let { owner -> if (session === owner) owner.resumeDrawing() }
+                resumeAfterStroke = null
                 performClick()
             }
-            MotionEvent.ACTION_CANCEL -> { cancelStroke(); scheduleFrame(token) }
+            MotionEvent.ACTION_CANCEL -> {
+                val owner = resumeAfterStroke
+                cancelStroke(); scheduleFrame(token)
+                if (owner != null && session === owner) owner.resumeDrawing()
+            }
         }
-        if (!pressureMode || session == null) invalidate()
+        if (!nativeCaptureEvent) invalidate()
         return true
     }
     private fun add(x: Float, y: Float) {
@@ -195,7 +232,9 @@ class InkCanvas(context: Context, private val recording: Recording) : View(conte
         if (capturing) capture.add(transaction, InkPoint(x, y))
         canvas.restore(); stroke.points += point
     }
-    private fun scheduleFrame(token: Long) { pendingToken = token; frameSession = session; pendingFrame = true; invalidate() }
+    private fun scheduleFrame(token: Long, clearPreview: Boolean = true) {
+        pendingToken = token; pendingClearPreview = clearPreview; frameSession = session; pendingFrame = true; invalidate()
+    }
     fun showPacket(packet: NativePacket) {
         val map = session?.coordinateMap ?: return
         val pos = IntArray(2); getLocationOnScreen(pos)
@@ -207,9 +246,10 @@ class InkCanvas(context: Context, private val recording: Recording) : View(conte
     }
     fun cancelStroke() {
         removeCallbacks(finishCapture); capture.clear(); captured.clear(); capturing = false
+        editRevision++; pendingEdit = null; resumeAfterStroke = null; pendingFrame = false
         current = null; rebuild(); invalidate()
     }
-    fun clear() { cancelStroke(); strokes.clear(); callbackPoints = emptyList(); strokeCount = 0; rebuild(); save(); invalidate() }
+    fun clear() { cancelStroke(); strokes.clear(); callbackPoints = emptyList(); strokeCount = 0; rebuild(); save(); redrawNativeEdit(); invalidate() }
     fun clearPacketMarkers() { callbackPoints = emptyList(); invalidate() }
     override fun performClick(): Boolean { super.performClick(); return true }
     private fun save() {

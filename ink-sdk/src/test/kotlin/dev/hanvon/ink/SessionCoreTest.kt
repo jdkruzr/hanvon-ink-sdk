@@ -76,4 +76,17 @@ class SessionCoreTest {
         gate.cleared(token); gate.frame(token)
         assertNull(gate.delay(token, 2000, 1000))
     }
+    @Test fun markerConfigurationCanReturnToBlackPressurePenWithoutReopening() {
+        val fake = Fake(); val core = SessionCore(fake, InkConfig())
+        core.open { _, _, _ -> }; core.activate(); core.suspend()
+        core.brush(NativeBrush.PENCIL); core.previewColor(NativePreviewColor.DARK_GRAY); core.width(30)
+        core.activate(); core.suspend()
+        core.brush(NativeBrush.PRESSURE_PEN); core.previewColor(NativePreviewColor.BLACK); core.width(6)
+        core.activate()
+        assertEquals(listOf(1, 3, 1), fake.calls.filter { it.first == "setPenColor" }.map { it.second.last() })
+        assertEquals(listOf(15, 15, 6), fake.calls.filter { it.first == "setPen" }.map { it.second.last() })
+        assertEquals(1, fake.calls.count { it.first == "init" })
+        assertFalse(fake.calls.any { it.first == "resetData" })
+        core.close()
+    }
 }

@@ -13,7 +13,7 @@ android {
 dependencies { testImplementation("junit:junit:4.13.2") }
 
 group = "dev.hanvon.ink"
-version = "0.2.0-rc1"
+version = "0.2.0"
 afterEvaluate {
     publishing {
         publications { create<MavenPublication>("release") {

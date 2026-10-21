@@ -11,14 +11,14 @@ The SDK is the product; Ink Lab and Ink Notes are independent consumers. M10 is 
 - [x] Versioned Maven artifact and independent Ink Notes dependency.
 - [x] Width-bearing editable strokes, version-8 storage (v7 when no width strokes), compatibility backups, export/erase/undo/transform support.
 - [x] Ink Notes native session adapter, settings, tool/overlay/viewport/refresh ownership and fallback.
-- [ ] USER EXPERIMENT 2: real editor operations and PDF annotation.
+- [x] USER EXPERIMENT 2: real editor operations and PDF annotation.
 - [x] Automated SDK, persistence, editing, fallback and frame checks; separately signed test build preparation. Physical lifecycle acceptance remains in Experiment 3.
-- [ ] USER EXPERIMENT 3: signed build acceptance, saved ink, restart, sleep/wake, rotations, multiwindow and stock Notes recovery.
-- [ ] Release 0.2.0 artifacts, checksums, source publication, documentation and local validation tags.
+- [x] USER EXPERIMENT 3: signed build acceptance, saved ink, restart, sleep/wake, rotations, multiwindow and stock Notes recovery.
+- [x] Release 0.2.0 artifacts, checksums, source publication, documentation and local validation tags.
 
 ## Execution rules
 
-Continue independent implementation while waiting for physical experiments. No device mutation or test staging before the observer is ready. Repeat failed experiments after fixes. Never call an experimental path validated based on builds or synthetic events. Preserve provisional Android ink when native packets are missing or ambiguous. The packet boolean does not uniquely identify a completed stroke.
+Continue independent implementation while waiting for physical experiments. Notify before device mutation or test staging. The observer explicitly authorized installing new builds as active testing proceeds: announce and install without repeatedly asking permission. Reconfirm readiness after a pause or absence before a new physical experiment. Repeat failed experiments after fixes. Never call an experimental path validated based on builds or synthetic events. Preserve provisional Android ink when native packets are missing or ambiguous. The packet boolean does not uniquely identify a completed stroke.
 
 Bottom/middle defaults: erase/select, configurable. Top defaults to pan only with validated identification; otherwise offer an explicit opt-in finger-to-pan policy. Rear eraser remains eraser. Do not change system button settings. Unsupported tools use the Android renderer.
 
@@ -49,3 +49,10 @@ Stock reference: MemoView.UpdatePen / drawPoint path and PslOp.drawPoints. Graff
 - Experiment 2 retest on SDK alpha06: observer confirmed bottom and rear erase now work, then confirmed middle lasso/move, pen triple-tap zoom, top pan and resumed writing all worked as advertised. `clearPreview` and `clearEditedPreview` calls are present in logs. Three zoom-tap associations fell back and were removed by the zoom gesture; do not count them as failed retained drawing strokes.
 - User stopped hands-on testing for the night before PDF import. No further M10 UI staging is authorized until the observer is ready. Continue offline work; see the morning handoff.
 - Candidate 0.2.0-rc1 additionally shares the retained-frame helper between both consumers, observes display changes including same-size rotation, invalidates capture on coordinate changes, and prevents refresh completion from racing edit handoff. These changes passed build/unit/lint checks but still need candidate-specific physical acceptance. Do not tag final 0.2.0 yet.
+
+- Resumed physical PDF test confirmed alignment at fit-page and zoomed sizes. Ordinary retained redraw flashed until SDK rc2 added matching-black-frame acknowledgement without a global reset; the observer then confirmed no-flash writing and visible erase. Partial erase and Undo also passed.
+- Android Marker fallback was invisible in AUTO_DU and visibly laggy in GC16. Recovered stock marker setup: style 15 with monochrome dark/light gray preview, then retained translucent ink and a clearing handoff. SDK rc3 exposes typed preview colors; app rc4 uses native Marker preview while retaining the app's original editable highlighter geometry and pressure samples. Observer confirmed good preview and retained-redraw performance. Marker erase/Undo, black-pen restoration and Settings recovery remain pending.
+
+- Experiment 2 completed on app rc6 / SDK rc3: marker partial erase/Undo/subsequent marker passed after cap-geometry and display-ownership fixes; return to black Pen and Settings recovery passed. Device-exported two-page PDF (532824 bytes) was pulled and both pages rendered/visually checked, preserving backgrounds, pressure ink and marker content. Capture and export details are in the editor-session report. Experiment 3: force-stop/reopen, Home/return, sleep/wake, all four orientations, split-screen fallback and fullscreen native recovery passed; original portrait lock restored. Candidate Ink Lab pressure/retention, Clear and exclusion on/off passed. Stock Notes coexistence is the remaining physical check before final packaging.
+
+- Experiment 3 completed: observer confirmed stock Notes writing and the return to Ink Notes for native writing, erase and Undo. Final capture: `recordings/20261021T183819.485246Z-9619126060000465`. All required physical checks passed. Final 0.2.0 packaging changes only version/dependency metadata; its SDK classes.jar is byte-identical to physically tested rc3.

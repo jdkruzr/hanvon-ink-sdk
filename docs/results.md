@@ -65,4 +65,4 @@ No observed physical pen signals, visible native overlay, button mapping, clippi
 
 ## October 21 native pressure and editor integration
 
-See [pressure results](pressure-session-20261021.md) and [editor results](editor-session-20261021.md). The alpha06 editor retest passed temporary erase/select/pan and return to drawing. Candidate 0.2.0-rc1 adds shared frame submission and display-change handling; PDF-on-device and final lifecycle acceptance are pending.
+See [pressure results](pressure-session-20261021.md) and [editor results](editor-session-20261021.md). The alpha06 editor retest passed temporary erase/select/pan and return to drawing. The 0.2.0 implementation adds shared frame submission, display-change handling, matching-black handoff without reset and typed gray preview colors. PDF, marker editing, lifecycle, all orientations, split-screen fallback/recovery, Lab Clear/exclusion and stock Notes coexistence passed on the M10; see [release evidence](release-0.2.0.md).

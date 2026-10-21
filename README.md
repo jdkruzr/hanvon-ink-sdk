@@ -6,9 +6,9 @@ A small Android library that attaches Hanvon native ink preview to an existing V
 
 There is no M10 model-name gate. Matching framework APIs and a recognized coordinate origin enable native preview automatically on other devices; availability is distinct from device validation.
 
-## 0.2 release candidate
+## 0.2.0 local release
 
-Native pressure configuration, immutable reported-width samples, optional retained rendering, conservative stroke association, input-clock conversion and source-aware button signals are implemented. The [pressure experiment](docs/pressure-session-20261021.md) passed 20/20 native stroke associations on the M10. The editor retest passed bottom/rear erase, lasso/move, pen triple-tap zoom, top pan and return to writing. Candidate `0.2.0-rc1` is built locally; PDF-on-device and final lifecycle acceptance remain pending; see the [implementation checklist](docs/implementation-plan.md). This is not a final 0.2 release claim.
+Native pressure configuration, immutable reported-width samples, optional retained rendering, conservative stroke association, input-clock conversion and source-aware button signals are implemented. The [pressure experiment](docs/pressure-session-20261021.md) passed 20/20 native stroke associations on the M10. Editor tests passed bottom/rear erase, lasso/move, pen triple-tap zoom, top pan, PDF alignment and return to writing. SDK `0.2.0` also exposes native gray preview colors; Ink Notes uses them for marker preview, with a physically verified marker/partial-erase/Undo/marker sequence. The final physical matrix passed: PDF annotation/export, Settings recovery, restart, Home/return, sleep/wake, all four orientations, split-screen Android fallback/fullscreen native recovery, Lab Clear/exclusion and stock Notes coexistence. See the [release record](docs/release-0.2.0.md) and [implementation checklist](docs/implementation-plan.md).
 
 The pressure comparison is a fifth lab mode. It retains native diameters when association succeeds and preserves Android provisional ink on explicit fallback. The first four comparison modes remain available.
 
@@ -31,7 +31,7 @@ The script defaults to this workstation's JDK/SDK locations; set `JAVA_HOME` and
 
 The demo uses package `dev.hanvon.ink.demo`, independent of Ink Notes. It requests no permissions, bundles no vendor binaries, and does not require root, platform signing, policy changes, or hidden-API exemptions. SDK reflection can still be restricted by another firmware; failures are reported and the demo retains its Android canvas.
 
-Convenient copies of the current v0.1.1 build are in `artifacts/`, alongside `SHA256SUMS-0.1.1` and validation evidence. The earlier v0.1.0 comparison artifacts remain available.
+The 0.2.0 local release bundle is in `artifacts/validation/0.2.0/`, with APKs, AAR, sources, Maven metadata, validation logs, a manifest and SHA256 checksums. Earlier comparison artifacts remain available. Nothing has been publicly published.
 
 ## Demo modes
 
@@ -73,7 +73,7 @@ python3 scripts/summarize.py recordings/CAPTURE_DIRECTORY
 
 Each collection gets a new directory. Raw recordings, artifacts, and build output are ignored by Git. Exports contain `metadata.json` and `events.jsonl`; developer collections also include package/logcat evidence and retained strokes. Activity and View records may describe the same physical input, so event totals are not unique input counts. Full diagnostic logging adds overhead; software timing is not pen-to-visible-ink latency.
 
-For hands-on tests, arrange a time with the observer **before** installing, launching, or staging the test.
+For hands-on tests, ensure the observer is watching before staging. During this active session, the user authorized announced build installations without repeated permission prompts.
 
 ## Design and provenance
 
@@ -81,7 +81,10 @@ The bridge uses public reflection entry points to call vendor framework methods 
 
 ABI, constants, and coordinate conventions were recovered from the local M10 capture in `../penstar_re`: `HvPenDrawManager`, `HvPenDrawService`, the patched framework `View` third-party hook, and stock Notes `HandView`/`MemoView`. The patched View's mode-3 path supplies the starting preview behavior; its one-second reset delay is experimental here too.
 
-No public API stability or other-device compatibility is promised yet. Advanced brushes, erasing, undo/redo, transformed Views, multiwindow native drawing, Ink Notes integration, and SDK publication are outside this milestone.
+No public API stability or other-device compatibility is promised yet. Applications
+own erasing, undo/redo and document semantics; Ink Notes demonstrates those on top
+of the independently packaged SDK. Arbitrarily transformed Views, native drawing
+in multiwindow and public artifact publication remain outside this milestone.
 
 ## License
 

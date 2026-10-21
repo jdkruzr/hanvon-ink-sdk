@@ -6,8 +6,8 @@ android {
         applicationId = "dev.hanvon.ink.demo"
         minSdk = 28
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.2.0-rc1"
+        versionCode = 11
+        versionName = "0.2.0"
         testInstrumentationRunner = "dev.hanvon.ink.demo.InkLabInstrumentation"
     }
     buildTypes { release { isMinifyEnabled = false } }

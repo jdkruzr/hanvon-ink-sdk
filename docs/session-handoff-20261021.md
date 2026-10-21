@@ -1,4 +1,46 @@
-# Morning handoff: reusable Hanvon ink SDK
+# Session handoff: reusable Hanvon ink SDK
+
+## Current state: 0.2.0 complete locally
+
+All three user experiments passed. The implementation checklist is complete.
+Read [release-0.2.0.md](release-0.2.0.md) for exact validation, installed package
+hashes, artifact contents and limits; the chronological editor report preserves
+all failures, fixes and observation captures.
+
+The SDK is the reusable product. Ink Lab and Ink Notes are independent consumers.
+M10 is the tested reference, not a model-name eligibility gate. Other Hanvon devices
+remain unvalidated. No public push or publication was performed.
+
+- SDK repository: `/home/jtd/hanvon-ink-sdk`, branch `feature/reusable-native-ink`,
+  local tag `v0.2.0`.
+- Ink Notes repository: `/home/jtd/ink-notes`, branch `feature/hanvon-native-ink`,
+  local tag `native-ink-v0.2.0`. It vendors immutable SDK 0.2.0 with sources.
+- Release bundle: `artifacts/validation/0.2.0/`, including commit manifest, source
+  archives, checksums, build/test logs and installation verification.
+- Installed M10 serial `9619126060000465`: Ink Lab 0.2.0/code 11 and separately named
+  `app.einknotes.nativeink` 0.20.0-native-sandbox/code 32. Original app is untouched.
+- Notebook `nativesdkexperiment2` already contains two pages and the PDF on page 2;
+  do not import it again. Stock Notes has a disposable `SDK-coexistence-test` note.
+- The device is left in Ink Notes on its PDF, portrait lock 0; original
+  accelerometer_rotation=0 and user_rotation=0 restored. Final upgrade retained
+  both the editor notebook and Lab strokes byte for byte.
+
+No physical questions remain pending. Final version-only packages have identical
+SDK/DEX code to the physically accepted candidates, were installed with matching
+signatures, and reopened successfully. 26 SDK and 29 app unit tests, lint/builds,
+Lab 100-stroke retention and full editor/PDF emulator instrumentation passed.
+
+The observer authorized announced installations during active testing without
+repeated permission prompts. After a pause or absence, ensure they are watching
+before staging a new physical experiment. Never modify original app data or use
+uninstall to bypass certificate mismatch. Their intended next external step is a
+fork/PR; publication and pushing remain separate work.
+
+## Historical morning snapshot
+
+The remainder records the overnight rc1 checkpoint. Installation versions, pending
+PDF import and stopped-emulator statements below are historical; use the current
+state above for continuing work.
 
 ## Start here
 

@@ -139,6 +139,8 @@ class InkSession internal constructor(private val view: View, val config: InkCon
     }
     /** Configure while suspended; callers resume only when their matching retained renderer is ready. */
     fun setBrush(brush: NativeBrush) { mainThread(); task("brush") { core.brush(brush) } }
+    /** Set while suspended. Marker hosts must use the clearing retained-frame handoff. */
+    fun setPreviewColor(color: NativePreviewColor) { mainThread(); task("previewColor") { core.previewColor(color) } }
     fun setWidth(widthPx: Int) {
         mainThread(); require(widthPx in 1..64)
         task("width") { core.width(widthPx) }
@@ -223,13 +225,24 @@ class InkSession internal constructor(private val view: View, val config: InkCon
         }
         return handoff.sequence
     }
-    fun notifyFrameCommitted(token: Long) {
+    fun notifyFrameCommitted(token: Long) = notifyFrameCommitted(token, clearPreview = true)
+    /**
+     * Matching black retained ink can acknowledge its frame without resetting the global preview,
+     * as stock Notes does for its ordinary pen. Pass false only when the retained geometry matches;
+     * edits must still use notifyRetainedRedrawCommitted. Recovery ink keeps explicit clearing.
+     */
+    fun notifyFrameCommitted(token: Long, clearPreview: Boolean) {
         mainThread()
         if (closed || failed || !foreground || token < 0) return
         handoff.frame(token)
         val delay = handoff.delay(token, SystemClock.uptimeMillis(), config.settlingMillis)
         diagnostic("retainedFrame", "token=$token current=${handoff.sequence} delay=$delay")
         if (delay == null) return
+        if (!clearPreview) {
+            handoff.cleared(token)
+            diagnostic("retainedMatch", "Matching retained frame acknowledged without global reset")
+            return
+        }
         ui.postDelayed({
             if (!foreground || closed || failed) return@postDelayed
             task("clearPreview", {

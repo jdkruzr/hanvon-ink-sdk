@@ -47,6 +47,7 @@ internal class SessionCore(private val transport: PenTransport, private val conf
     }
     fun pen(down: Boolean) { transport.call("enablePen", owned(), down) }
     fun brush(brush: NativeBrush) { transport.call("setPen", owned(), brush.wireValue) }
+    fun previewColor(color: NativePreviewColor) { transport.call("setPenColor", owned(), color.wireValue) }
     fun width(width: Int) { transport.call("setPenWidth", owned(), width) }
     fun clearPreview() { transport.call("resetData") }
     fun close(): List<Throwable> {

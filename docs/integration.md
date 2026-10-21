@@ -24,18 +24,22 @@ session?.setForeground(activityResumed && !activity.isInMultiWindowMode)
 // In the host's input handler, in addition to its existing drawing:
 val token = session?.observe(event, retainStroke = hostWillRetainThisStroke) ?: -1L
 
-// For UP/CANCEL: redraw the retained bitmap, then acknowledge that frame.
-// On API 29+ with hardware rendering, registerFrameCommitCallback is the
-// preferred software signal. It does not prove the e-ink panel has updated.
-drawingView.viewTreeObserver.registerFrameCommitCallback {
-    drawingView.post { session?.notifyFrameCommitted(token) }
+// For UP/CANCEL: retain owner + token and invalidate the View.
+// Consume that pending acknowledgement once inside onDraw, after painting ink:
+val owner = session
+RetainedFrame.afterDraw(drawingView, canvas) {
+    if (session === owner) owner?.notifyFrameCommitted(token)
 }
 
 // On pause/teardown or replacement:
 session?.close()
 ```
 
-The frame-commit API needs an API-29 check and hardware acceleration. The demo records a labeled post-draw approximation on API 28/software rendering. Register a retained-frame acknowledgement for the completed/canceled stroke only, not for every MOVE. Keep the token and session instance associated with that frame; don't deliver old-frame acknowledgements to a replacement session.
+`RetainedFrame` uses hardware frame commitment on API 29+ and a labeled post-draw
+approximation on API 28/software rendering. Neither proves the physical e-ink panel
+has updated. Register a retained-frame acknowledgement for the completed/canceled
+stroke only, not for every MOVE. Keep the token and session instance associated
+with that frame; don't deliver old-frame acknowledgements to a replacement session.
 
 `retainStroke=false` at DOWN prevents mode-3 preview for tools the host does not retain. MOVE does not change this choice mid-stroke. Always forward UP/CANCEL for a stroke you began observing.
 
@@ -54,6 +58,15 @@ The lifecycle is INITIALIZING → SUSPENDED/READY → DRAWING, with FAILED or CL
 The library initializes an inactive zero-area registration, sets pen parameters, then configures and activates its actual drawing bounds while foregrounded. In preview mode it enables native pen drawing at DOWN and disables it at UP/CANCEL. Callback mode keeps the pen enabled while the area is active to investigate autonomous native delivery.
 
 A retained-frame acknowledgement plus the settling delay permits `resetData()` to remove preview data. A new stroke, focus loss, geometry revision, failure, or close invalidates pending clearing. The reset method is global in this firmware, so it is only called during this session's active foreground interval. Avoid concurrent native clients and disable native drawing in multiwindow; the demo does so.
+
+`notifyFrameCommitted(token, clearPreview = false)` acknowledges matching retained
+black ink without a global reset. This follows stock Notes' ordinary black-pen
+redraw path and is useful when native-reported geometry has been retained exactly.
+The one-argument overload preserves clearing behavior for existing consumers.
+Recovery ink that differs from preview still needs clearing. Hosts opting out of
+stroke resets must explicitly clear after retained edits using the suspended-redraw
+API below; simply suppressing every reset leaves erased ink visible. The M10
+comparison confirmed no-flash black writing and correct visible erase afterward.
 
 `suspendDrawing()`/`resumeDrawing()` are available for host dialogs and other occlusion. The SDK also watches window focus and View attachment. `setForeground(false)` suspends; the demo closes on pause to make ownership explicit. Close disables and unregisters only the owned handle and continues teardown after a setter error. It does not call global clear, overwrite persistent display settings, or invoke the special -100/-1000 registration rectangles.
 
@@ -75,6 +88,25 @@ An exception during native work closes the owned area, reports FAILED with opera
 
 `InkConfig(brush = NativeBrush.PRESSURE_PEN)` selects recovered style 6. `PENCIL` retains style 15. `setBrush()` and `setWidth()` should be used while suspended; resume after the host renderer and geometry match. Width remains in display pixels.
 
+`setPreviewColor(NativePreviewColor)` selects the monochrome firmware's BLACK (1),
+WHITE (2), DARK_GRAY (3) or LIGHT_GRAY (4) preview code while suspended. These are
+not ARGB values and do not describe retained opacity. Restore BLACK when switching
+back to a black brush. Stock Notes combines style 15 (`PENCIL`) with a wider nib
+and DARK_GRAY/LIGHT_GRAY for marker preview, then composites an alpha marker layer
+and clears the native preview after the retained redraw. Marker hosts must use
+the clearing `notifyFrameCommitted(token)` handoff, never the exact-black-match
+no-reset overload. The M10 observer confirmed good preview and retained redraw for
+the tested dark marker, including partial erase/Undo and subsequent marker writing.
+Other widths/shades and the color-code interpretation on color tablets are unverified.
+
+The Android backing frame also needs a gray-capable display waveform. Native gray
+preview can work while retained gray disappears in AUTO_DU (22). Ink Notes selects
+A2_DITHER (13) before activating the native session and while editing gray strokes,
+serializing that change with its existing display controller. The SDK does not set
+the Android display waveform. Coordinate native activation with any asynchronous
+host display-mode changes and invalidate stale completion callbacks on ownership
+loss; selecting the native preview color alone does not configure retained rendering.
+
 `InkListener.onRenderedPacket(RenderedStroke, arrivalNanos)` supplies immutable, defensively copied points in attached-View coordinates with reported width diameters. It is still a packet, not an asserted unique completed stroke. `RenderedStroke.transformed()` scales coordinates and widths together. Optional `RenderedInkRenderer` draws the stock plain pressure-pen circle geometry on an Android Canvas, including bitmap or PDF canvases. It has no document or tool dependencies.
 
 `StrokeCapture` is an opt-in conservative association helper. Give it host transaction IDs, original input positions, and timestamps from `InputClock.eventNanos(event)`. Keep your own provisional stroke until `finish()` returns an accepted native result. Call `end()` on UP and finish after a quiet 1050 ms interval. `begin()` returns false at the bounded transaction limit; retain Android ink and drain existing transactions. `finish(force=true)` drains ended transactions at an ownership boundary using already received packets. Clear the batch on revision/ownership changes; late packets must not revise another page or undo state.
@@ -87,7 +119,7 @@ Applications must explicitly suspend continuously enabled mode 0 for unsupported
 
 ### Editing a retained page
 
-A stroke-token acknowledgement cannot clean up an erase, lasso, undo or pan: those operations may deliberately invalidate the last stroke token. Suspend native drawing, retain pending input, perform the edit, and submit the edited Android frame. Then call `notifyRetainedRedrawCommitted { cleared -> ... }` while still suspended. Resume only after completion and after rechecking host tool/window eligibility. This resets the old preview only while this session still owns a visible foreground surface. A frame arriving after resume, focus loss or close is rejected. It never resets during teardown. The alpha06 editor retest confirmed visible erase and selection/pan recovery on the M10. Candidate-specific lifecycle testing remains pending.
+A stroke-token acknowledgement cannot clean up an erase, lasso, undo or pan: those operations may deliberately invalidate the last stroke token. Suspend native drawing, retain pending input, perform the edit, and submit the edited Android frame. Then call `notifyRetainedRedrawCommitted { cleared -> ... }` while still suspended. Resume only after completion and after rechecking host tool/window eligibility. This resets the old preview only while this session still owns a visible foreground surface. A frame arriving after resume, focus loss or close is rejected. It never resets during teardown. The alpha06 editor retest confirmed visible erase and selection/pan recovery on the M10. The final M10 lifecycle matrix also passed restart, Home/return, sleep/wake, all orientations, split-screen Android fallback/fullscreen recovery and stock Notes coexistence. Other devices remain unvalidated.
 
 `RetainedFrame.afterDraw(view, canvas) { signal -> ... }` provides the shared frame-submission helper used by both consumers. Call it once inside `onDraw` after painting retained ink; capture and validate the session/token or edit revision in the callback. It uses hardware frame completion where available and labels software post-draw approximation separately. It explicitly schedules a subsequent frame because onDraw may run after callback collection; an idle view must not strand preview cleanup. Ignore rejected palm events completely; they must not suspend the session or invalidate a valid stroke handoff.
 
