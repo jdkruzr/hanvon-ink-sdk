@@ -2,15 +2,26 @@
 
 A small Android library that attaches Hanvon native ink preview to an existing View, plus **Hanvon Ink Lab**, a diagnostic app. The app owns its retained strokes; the library owns the native session and preview lifecycle.
 
-**Current result:** an ordinary APK on the connected M10 draws native ink. In the [October 21 device session](docs/device-session-20261021.md), mode 0 with continuous enablement was visually flawless to the observer, with 57 recorded strokes/save events/native packets. Clipping, landscape alignment, restart/sleep recovery, and stock Notes recovery passed the observed checks. Mode 3 exhibited preview gaps and hesitations. Bottom/middle buttons produced states 32/64; the configured top button produced finger input. Numerical latency and broader device/lifecycle coverage remain unvalidated. See [results](docs/results.md).
+**Current release: 0.2.1 (experimental), Apache-2.0.** Download the SDK Maven
+bundle, AAR, sources and Ink Lab APK from [GitHub Releases](https://github.com/jdkruzr/hanvon-ink-sdk/releases).
+Version 0.2.1 changes licensing and packaging only; drawing code matches the
+physically accepted 0.2.0 implementation.
 
-There is no M10 model-name gate. Matching framework APIs and a recognized coordinate origin enable native preview automatically on other devices; availability is distinct from device validation.
+Two independent consumers exercise the SDK: this repository's Ink Lab and
+[Ink Notes with native ink](https://github.com/jdkruzr/ink-notes/tree/hanvon-native-ink).
+The SDK owns the native session and preview; applications own documents, tools,
+undo and retained rendering.
 
-## 0.2.0 local release
+Physical acceptance on the Hanvon M10 / Penstar eNote Pro (Android 14) covers
+pressure pen, marker preview/retention, editing, PDF annotation/export, Settings,
+restart/Home/sleep, all four orientations, multiwindow Android fallback/fullscreen
+recovery, clipping/exclusion and stock Notes coexistence. See the
+[0.2.1 release notes](docs/release-0.2.1.md) and [validation results](docs/results.md).
 
-Native pressure configuration, immutable reported-width samples, optional retained rendering, conservative stroke association, input-clock conversion and source-aware button signals are implemented. The [pressure experiment](docs/pressure-session-20261021.md) passed 20/20 native stroke associations on the M10. Editor tests passed bottom/rear erase, lasso/move, pen triple-tap zoom, top pan, PDF alignment and return to writing. SDK `0.2.0` also exposes native gray preview colors; Ink Notes uses them for marker preview, with a physically verified marker/partial-erase/Undo/marker sequence. The final physical matrix passed: PDF annotation/export, Settings recovery, restart, Home/return, sleep/wake, all four orientations, split-screen Android fallback/fullscreen native recovery, Lab Clear/exclusion and stock Notes coexistence. See the [release record](docs/release-0.2.0.md) and [implementation checklist](docs/implementation-plan.md).
-
-The pressure comparison is a fifth lab mode. It retains native diameters when association succeeds and preserves Android provisional ink on explicit fallback. The first four comparison modes remain available.
+There is no M10 model-name gate: matching framework APIs and a recognized
+coordinate origin enable compatible devices. Other models remain unvalidated.
+Numeric pen-to-visible-ink latency is unmeasured; missing or ambiguous native
+packets preserve provisional Android ink. The API remains experimental.
 
 ## Build and artifacts
 
@@ -20,7 +31,7 @@ Requires JDK 17 and an Android SDK with platform 35. Gradle 8.9, AGP 8.7.3, Kotl
 ./scripts/check.sh
 ```
 
-The script defaults to this workstation's JDK/SDK locations; set `JAVA_HOME` and `ANDROID_HOME` elsewhere.
+Set `JAVA_HOME` to JDK 17 and `ANDROID_HOME` to your Android SDK, or configure the SDK path in an untracked `local.properties` file.
 
 | Output | Purpose |
 | --- | --- |
@@ -31,7 +42,7 @@ The script defaults to this workstation's JDK/SDK locations; set `JAVA_HOME` and
 
 The demo uses package `dev.hanvon.ink.demo`, independent of Ink Notes. It requests no permissions, bundles no vendor binaries, and does not require root, platform signing, policy changes, or hidden-API exemptions. SDK reflection can still be restricted by another firmware; failures are reported and the demo retains its Android canvas.
 
-The 0.2.0 local release bundle is in `artifacts/validation/0.2.0/`, with APKs, AAR, sources, Maven metadata, validation logs, a manifest and SHA256 checksums. Earlier comparison artifacts remain available. Nothing has been publicly published.
+GitHub release assets contain the reusable SDK and diagnostic APK, with SHA256 checksums. Raw device captures and notebooks are not release assets. Historical local validation bundles are described in the session reports.
 
 ## Demo modes
 
@@ -45,6 +56,22 @@ The UI includes live recording counters, a center exclusion rectangle, rotation,
 Rear eraser, side buttons, finger conversion, hover, and unfamiliar tools are recorded. The demo does **not** implement eraser tools or side-button actions yet. Eraser/finger input is not converted into retained black strokes. Native callback mode remains an investigation surface and may exhibit firmware-specific behavior for those inputs.
 
 ## Integrating the library
+
+Download `hanvon-ink-sdk-0.2.1-maven.zip` from the release and extract it at the
+application repository root; this creates `vendor/maven/`. Configure Gradle:
+
+```kotlin
+// settings.gradle.kts, inside dependencyResolutionManagement.repositories:
+maven {
+    url = uri("vendor/maven")
+    content { includeGroup("dev.hanvon.ink") }
+}
+// Application module build.gradle.kts:
+dependencies { implementation("dev.hanvon.ink:ink-sdk:0.2.1") }
+```
+
+This versioned vendoring keeps builds independent of the SDK checkout or a hosted
+Maven repository. Preserve the bundled Apache license and notice when redistributing.
 
 See [the API and lifecycle contract](docs/integration.md). The library uses Kotlin's standard library as its only runtime dependency beyond Android; a manually consumed AAR needs that dependency in its host. The demo's project dependency resolves it automatically.
 
@@ -73,7 +100,7 @@ python3 scripts/summarize.py recordings/CAPTURE_DIRECTORY
 
 Each collection gets a new directory. Raw recordings, artifacts, and build output are ignored by Git. Exports contain `metadata.json` and `events.jsonl`; developer collections also include package/logcat evidence and retained strokes. Activity and View records may describe the same physical input, so event totals are not unique input counts. Full diagnostic logging adds overhead; software timing is not pen-to-visible-ink latency.
 
-For hands-on tests, ensure the observer is watching before staging. During this active session, the user authorized announced build installations without repeated permission prompts.
+For hands-on tests, ensure the observer is watching before staging.
 
 ## Design and provenance
 
@@ -84,8 +111,8 @@ ABI, constants, and coordinate conventions were recovered from the local M10 cap
 No public API stability or other-device compatibility is promised yet. Applications
 own erasing, undo/redo and document semantics; Ink Notes demonstrates those on top
 of the independently packaged SDK. Arbitrarily transformed Views, native drawing
-in multiwindow and public artifact publication remain outside this milestone.
+in multiwindow and Maven Central publication remain outside this milestone.
 
 ## License
 
-MIT; see [LICENSE](LICENSE). The implementation contains no redistributed vendor binaries.
+Apache-2.0 for 0.2.1 and later; see [LICENSE](LICENSE) and [NOTICE](NOTICE). Earlier local 0.2.0 checkpoints remain under their original MIT terms. The implementation contains no redistributed vendor binaries.

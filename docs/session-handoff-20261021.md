@@ -1,6 +1,9 @@
 # Session handoff: reusable Hanvon ink SDK
 
-## Current state: 0.2.0 complete locally
+Public publication work follows the [0.2.1 release record](release-0.2.1.md).
+The checkpoint below predates public publication and preserves its local evidence.
+
+## Historical checkpoint: 0.2.0 complete locally
 
 All three user experiments passed. The implementation checklist is complete.
 Read [release-0.2.0.md](release-0.2.0.md) for exact validation, installed package

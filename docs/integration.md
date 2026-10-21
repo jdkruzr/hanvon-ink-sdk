@@ -70,7 +70,7 @@ comparison confirmed no-flash black writing and correct visible erase afterward.
 
 `suspendDrawing()`/`resumeDrawing()` are available for host dialogs and other occlusion. The SDK also watches window focus and View attachment. `setForeground(false)` suspends; the demo closes on pause to make ownership explicit. Close disables and unregisters only the owned handle and continues teardown after a setter error. It does not call global clear, overwrite persistent display settings, or invoke the special -100/-1000 registration rectangles.
 
-Some vendor wrapper setters swallow remote exceptions. Therefore a returned call is recorded as an attempted configuration, not verified effect. The service owns cleanup on callback death; actual force-stop recovery still needs physical testing.
+Some vendor wrapper setters swallow remote exceptions. Therefore a returned call is recorded as an attempted configuration, not verified effect. The service owns cleanup on callback death; force-stop recovery passed on the tested M10, while other firmware still needs physical validation.
 
 ## Native packets
 
