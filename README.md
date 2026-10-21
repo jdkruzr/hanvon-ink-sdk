@@ -6,6 +6,12 @@ A small Android library that attaches Hanvon native ink preview to an existing V
 
 There is no M10 model-name gate. Matching framework APIs and a recognized coordinate origin enable native preview automatically on other devices; availability is distinct from device validation.
 
+## 0.2 development
+
+Native pressure configuration, immutable reported-width samples, optional retained rendering, conservative stroke association, input-clock conversion and source-aware button signals are implemented. The [pressure experiment](docs/pressure-session-20261021.md) passed 20/20 native stroke associations on the M10. Ink Notes integration is being validated separately; see the [implementation checklist](docs/implementation-plan.md). This is not a final 0.2 release claim.
+
+The pressure comparison is a fifth lab mode. It retains native diameters when association succeeds and preserves Android provisional ink on explicit fallback. The first four comparison modes remain available.
+
 ## Build and artifacts
 
 Requires JDK 17 and an Android SDK with platform 35. Gradle 8.9, AGP 8.7.3, Kotlin 2.0.21; minSdk 28, targetSdk 35.

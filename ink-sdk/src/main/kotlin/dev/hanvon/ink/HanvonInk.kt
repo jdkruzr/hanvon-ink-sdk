@@ -15,6 +15,8 @@ import java.lang.ref.WeakReference
 interface InkListener {
     fun onState(state: SessionState, detail: String) {}
     fun onNativePacket(packet: NativePacket) {}
+    /** View-local pixels; packet semantics, not a guaranteed unique stroke. */
+    fun onRenderedPacket(stroke: RenderedStroke, arrivalNanos: Long) {}
     fun onDiagnostic(operation: String, detail: String, elapsedNanos: Long) {}
 }
 
@@ -95,7 +97,18 @@ class InkSession internal constructor(private val view: View, val config: InkCon
                     try {
                         val packet = NativePacket.parse(flag, arrival, values)
                         val callbackEpoch = epoch
-                        ui.post { if (!closed && !failed && foreground && epoch == callbackEpoch) listener.onNativePacket(packet) }
+                        ui.post { if (!closed && !failed && foreground && epoch == callbackEpoch) {
+                            listener.onNativePacket(packet)
+                            val map = coordinateMap
+                            if (!closed && !failed && foreground && epoch == callbackEpoch && map != null && packet.points.isNotEmpty()) {
+                                val pos = IntArray(2); view.getLocationOnScreen(pos)
+                                val stroke = RenderedStroke(packet.points.map {
+                                    val p = map.toScreen(InkPoint(it.x, it.y))
+                                    RenderedPoint(p.x - pos[0], p.y - pos[1], it.renderedWidth)
+                                })
+                                listener.onRenderedPacket(stroke, packet.arrivalNanos)
+                            }
+                        } }
                     } catch (e: IllegalArgumentException) { diagnostic("packetRejected", e.message ?: "invalid packet") }
                 }
             }
@@ -110,6 +123,8 @@ class InkSession internal constructor(private val view: View, val config: InkCon
     fun setBounds(areaInView: InkRect? = null, excludedInView: InkRect? = null) {
         mainThread(); localArea = areaInView; exclusion = excludedInView; geometry = null; update()
     }
+    /** Configure while suspended; callers resume only when their matching retained renderer is ready. */
+    fun setBrush(brush: NativeBrush) { mainThread(); task("brush") { core.brush(brush) } }
     fun setWidth(widthPx: Int) {
         mainThread(); require(widthPx in 1..64)
         task("width") { core.width(widthPx) }
@@ -148,7 +163,7 @@ class InkSession internal constructor(private val view: View, val config: InkCon
         val key = "${display.rotation}:${size.x}:${size.y}:$screenBounds:$excluded"
         if (foreground && geometry == key) return
         geometry = key; coordinateMap = map
-        epoch++; val revision = epoch; handoff.invalidate(); foreground = !bounds.empty
+        epoch++; val revision = epoch; handoff.invalidate(); foreground = !screenBounds.empty
         task("geometry", { !closed && !failed && epoch == revision }) {
             core.configure(map, screenBounds, excluded)
             if (foreground && epoch == revision) {

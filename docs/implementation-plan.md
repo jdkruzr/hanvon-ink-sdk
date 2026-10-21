@@ -1,0 +1,43 @@
+# Reusable native ink implementation checklist
+
+The SDK is the product; Ink Lab and Ink Notes are independent consumers. M10 is the verified reference, not a model-name eligibility gate. The approved scope includes native pressure ink using firmware-reported widths; old Android brushes and existing notes retain their behavior.
+
+## Milestones
+
+- [x] Preserve baseline: `v0.1.1`, commit `6e7b025`; create feature branches in both repositories.
+- [x] Reusable brush configuration, immutable rendered samples, optional renderer, input classification and conservative stroke association.
+- [x] Lab pressure/retention comparison and diagnostic recording.
+- [x] USER EXPERIMENT 1: pressure, callback semantics, buttons, finger/palm control. Notify and wait for observer before installation/launch/staging.
+- [x] Versioned Maven artifact and independent Ink Notes dependency.
+- [ ] Width-bearing editable strokes, version-8 storage (v7 when no width strokes), compatibility backups, export/erase/undo/transform support.
+- [ ] Ink Notes native session adapter, settings, tool/overlay/viewport/refresh ownership and fallback.
+- [ ] USER EXPERIMENT 2: real editor operations and PDF annotation.
+- [ ] Automated SDK, persistence, editing, fallback and lifecycle checks; signed upgrade preparation.
+- [ ] USER EXPERIMENT 3: signed build acceptance, saved ink, restart, sleep/wake, rotations, multiwindow and stock Notes recovery.
+- [ ] Release 0.2.0 artifacts, checksums, source publication, documentation and local validation tags.
+
+## Execution rules
+
+Continue independent implementation while waiting for physical experiments. No device mutation or test staging before the observer is ready. Repeat failed experiments after fixes. Never call an experimental path validated based on builds or synthetic events. Preserve provisional Android ink when native packets are missing or ambiguous. The packet boolean does not uniquely identify a completed stroke.
+
+Bottom/middle defaults: erase/select, configurable. Top defaults to pan only with validated identification; otherwise offer an explicit opt-in finger-to-pan policy. Rear eraser remains eraser. Do not change system button settings. Unsupported tools use the Android renderer.
+
+Native preview and saved width appearance must agree. SDK owns firmware behavior, coordinate conversion and normalized signals; app owns document format, undo, tools and UI. No proprietary firmware code or binaries are redistributed. Public publishing/pushing is separate work.
+
+## Evidence / outstanding decisions from experiments
+
+Baseline device evidence: [October 21 session](device-session-20261021.md).
+Stock reference: MemoView.UpdatePen / drawPoint path and PslOp.drawPoints. Graffiti style 6 maps to retained circles of radius reported width / 2. Pencil style 15 maps to a constant-width path. Stock callback action 1 and action 3 both emit true; association must remain conservative until measured.
+
+## Implementation progress, October 21
+
+- SDK branch now has typed styles, immutable width samples, optional stock-style circle renderer, normalized button signals, a bounded conservative transaction matcher, event-clock conversion, and Maven/source publication.
+- Experiment 1 first pressure pass: six packets, two accepted; dispatch-time association incorrectly rejected queued Android input. Reproduced from capture and fixed using MotionEvent event time. Stock native lift-off tails also required matching the endpoint allowance in the path check.
+- Retest on alpha02: user confirmed smooth tracking and unchanged retained appearance. All 20 packets matched 20 retained native strokes; zero association fallbacks. Capture `recordings/20261021T055758.648713Z-9619126060000465`, session `1792562216009`.
+- Ordered button/finger/palm experiment requested and pending. No claim of reliable top-button identification yet.
+- Ink Notes now consumes a vendored versioned Maven artifact, includes v8 width-stroke storage with pre-upgrade backup, shared SDK rendering, editable native strokes, configurable button mapping, native ownership/overlay/viewport policy and a separately named sandbox build.
+- Automated checks: SDK unit/replay tests, Ink Notes unit tests, lint/builds; emulator Ink Notes fallback/input/v8 reopen/undo/redo/width transform/bitmap/PDF fixture and SDK 100-stroke retention fixture passed. Final checks will be repeated only for subsequent relevant changes.
+- Installed Ink Notes certificate SHA256 `462cf807d3cbf43aa2cecf8ee0b973266ad887c166637f0317aeb8e19a3e8fcd` differs from workstation debug certificate `e91d14f5065a1eb6cfbd42aee993b51c6cb16f7cc21d4879b0b4db1e136f9680`. Installed app is non-debuggable, so run-as cannot back up its data. Matching key requested. No in-place upgrade/uninstall attempted. Sandbox package `app.einknotes.nativeink` is the independent test fallback; original package and data remain intact.
+
+- Experiment 1 completed: [pressure and source-aware input evidence](pressure-session-20261021.md). True touchscreen contacts are distinguishable from the tested top button by event source.
+- User confirmed no matching installed-app key is available and explicitly selected a separately named build. Final install target is now `app.einknotes.nativeink`; in-place upgrade is no longer a completion requirement. Keep upstream/default package unchanged for the future fork/PR.

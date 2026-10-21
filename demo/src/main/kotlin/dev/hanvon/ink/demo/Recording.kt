@@ -44,14 +44,18 @@ class Recording(context: Context, capability: CapabilityReport) {
     @Volatile private var closed = false
     @Volatile var ioFailure: String? = null; private set
     init { File(directory, "metadata.json").writeText(metadata.toString(2)) }
-    fun event(type: String, payload: JSONObject = JSONObject()) {
+    fun event(type: String, payload: JSONObject = JSONObject()) = deferredEvent(type) { payload }
+    /** Snapshot inputs before calling. Serialization belongs on the recorder, never the UI thread. */
+    fun deferredEvent(type: String, payload: () -> JSONObject) {
         if (closed) return
         if (queued.incrementAndGet() > 10_000) { queued.decrementAndGet(); dropped.incrementAndGet(); return }
-        val line = JSONObject().put("type", type).put("arrivalNanos", SystemClock.elapsedRealtimeNanos())
-            .put("uptimeMillis", SystemClock.uptimeMillis()).put("data", payload).toString()
+        val arrival = SystemClock.elapsedRealtimeNanos(); val uptime = SystemClock.uptimeMillis()
         worker.execute {
-            try { writer.appendLine(line); count.incrementAndGet() }
-            catch (e: Exception) { ioFailure = e.toString(); dropped.incrementAndGet() }
+            try {
+                val line = JSONObject().put("type", type).put("arrivalNanos", arrival)
+                    .put("uptimeMillis", uptime).put("data", payload()).toString()
+                writer.appendLine(line); count.incrementAndGet()
+            } catch (e: Exception) { ioFailure = e.toString(); dropped.incrementAndGet() }
             finally { queued.decrementAndGet() }
         }
     }

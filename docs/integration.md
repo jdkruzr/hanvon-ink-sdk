@@ -70,3 +70,21 @@ The service broadcasts `true` for more than one native action. A packet is not g
 Missing or inaccessible APIs produce an unavailable capability report. Unknown origins are unsupported until a transform exists. Attach does not use root, alternate low-level Binder transactions, hidden-API exemptions, or direct device-node access as fallback.
 
 An exception during native work closes the owned area, reports FAILED with operation details, and leaves the host's retained canvas usable. Listener implementations should return promptly and avoid throwing. Monitor both failures and the absence of actual physical input; successful configuration with no input is not a completed test.
+
+## 0.2 native pressure APIs (experimental)
+
+`InkConfig(brush = NativeBrush.PRESSURE_PEN)` selects recovered style 6. `PENCIL` retains style 15. `setBrush()` and `setWidth()` should be used while suspended; resume after the host renderer and geometry match. Width remains in display pixels.
+
+`InkListener.onRenderedPacket(RenderedStroke, arrivalNanos)` supplies immutable, defensively copied points in attached-View coordinates with reported width diameters. It is still a packet, not an asserted unique completed stroke. `RenderedStroke.transformed()` scales coordinates and widths together. Optional `RenderedInkRenderer` draws the stock plain pressure-pen circle geometry on an Android Canvas, including bitmap or PDF canvases. It has no document or tool dependencies.
+
+`StrokeCapture` is an opt-in conservative association helper. Give it host transaction IDs, original input positions, and timestamps from `InputClock.eventNanos(event)`. Keep your own provisional stroke until `finish()` returns an accepted native result. Call `end()` on UP and finish after a quiet 1050 ms interval. `begin()` returns false at the bounded transaction limit; retain Android ink and drain existing transactions. `finish(force=true)` drains ended transactions at an ownership boundary using already received packets. Clear the batch on revision/ownership changes; late packets must not revise another page or undo state.
+
+The matcher checks the native packet's event-time window, start/end positions and path. Identical packets are coalesced only within an unambiguous host transaction. Multiple plausible owners or different candidate packets produce explicit fallback. A callback received before Android dispatch is valid; callback arrival is not a per-point sample timestamp. The M10 tests do not establish this policy for every firmware.
+
+`PenInput.classify(toolType, buttons, source)` returns signals rather than assigning app tools. Bits 32/64/128 are independent; legacy tool 6 maps to primary. Rear eraser is explicit. Finger tool from a stylus source is `PEN_AS_FINGER`; other finger input remains `FINGER`. Do not infer button identity from finger tool alone. The SDK does not mutate firmware button settings.
+
+Applications must explicitly suspend continuously enabled mode 0 for unsupported tools, same-window occlusion and editing gestures; `observe(retainStroke=false)` alone does not turn off mode 0. Retain a session-specific frame token, invalidate stale work on document/geometry changes, and forward stroke termination even on cancellation. SDK callbacks and state notifications do not own your document's undo transaction.
+
+### Packaging
+
+`./gradlew :ink-sdk:publishReleasePublicationToLocalArtifactsRepository` produces a Maven repository under `artifacts/maven`, including an AAR, source JAR, POM, Gradle metadata and checksums. Consumers declare `implementation("dev.hanvon.ink:ink-sdk:<version>")` and point a Maven repository at a copied artifact repository. No sibling source checkout or vendor runtime binary is needed. Ink Lab uses the module directly; Ink Notes independently consumes a vendored artifact and the same public APIs.

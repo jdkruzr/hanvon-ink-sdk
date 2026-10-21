@@ -3,7 +3,7 @@ package dev.hanvon.ink
 enum class DrawingMode(internal val wireValue: Int) { NATIVE_PREVIEW(3), NATIVE_CALLBACK(0) }
 enum class SessionState { INITIALIZING, READY, DRAWING, SUSPENDED, FAILED, CLOSED }
 data class InkConfig(val mode: DrawingMode = DrawingMode.NATIVE_CALLBACK, val widthPx: Int = 4,
-    val settlingMillis: Long = 1000) {
+    val settlingMillis: Long = 1000, val brush: NativeBrush = NativeBrush.PENCIL) {
     init { require(widthPx in 1..64 && settlingMillis in 0..5000) }
 }
 
@@ -18,7 +18,7 @@ internal class SessionCore(private val transport: PenTransport, private val conf
         handle = created
         transport.call("setAreaActive", created, false)
         transport.call("enablePen", created, false)
-        transport.call("setPen", created, 15)
+        transport.call("setPen", created, config.brush.wireValue)
         transport.call("setPenColor", created, 1)
         transport.call("setPenWidth", created, config.widthPx)
         transport.call("setDrawStatus", created, config.mode.wireValue)
@@ -46,6 +46,7 @@ internal class SessionCore(private val transport: PenTransport, private val conf
         transport.call("setAreaActive", h, false)
     }
     fun pen(down: Boolean) { transport.call("enablePen", owned(), down) }
+    fun brush(brush: NativeBrush) { transport.call("setPen", owned(), brush.wireValue) }
     fun width(width: Int) { transport.call("setPenWidth", owned(), width) }
     fun clearPreview() { transport.call("resetData") }
     fun close(): List<Throwable> {

@@ -43,7 +43,7 @@ class MainActivity : Activity() {
         recording = Recording(this, capability)
         selected = savedInstanceState?.getInt("mode") ?: getPreferences(MODE_PRIVATE).getInt("mode", if (capability.available) 3 else 0)
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
-            selected = when (intent.getStringExtra("mode")) { "baseline" -> 0; "preview" -> 1; "callback" -> 2; "native" -> 3; else -> selected }
+            selected = when (intent.getStringExtra("mode")) { "baseline" -> 0; "preview" -> 1; "callback" -> 2; "native" -> 3; "pressure" -> 4; else -> selected }
         }
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(-1); fitsSystemWindows = true }
         val title = TextView(this).apply { text = "Hanvon Ink Lab · experimental"; textSize = 22f; setPadding(16, 12, 16, 4) }
@@ -53,7 +53,7 @@ class MainActivity : Activity() {
         counts = TextView(this).apply { textSize = 13f; setLines(2); ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(16, 0, 16, 4) }; root.addView(counts)
         modes = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("Android baseline", "Mode 3 preview (experimental)", "Native callback inspection", "Native ink + retained drawing"))
+                listOf("Android baseline", "Mode 3 preview (experimental)", "Native callback inspection", "Native ink + retained drawing", "Native pressure + reported widths (experimental)"))
             setSelection(selected)
         }
         root.addView(modes)
@@ -120,12 +120,13 @@ class MainActivity : Activity() {
     private fun startSession() {
         if (!resumed || isInMultiWindowMode || session != null) return
         canvas.clearPacketMarkers()
+        canvas.pressureMode = selected == 4
         val thisGeneration = ++generation
         recording.event("mode", JSONObject().put("selected", selected).put("displayMode", Recording.readDisplayMode(this)))
         if (selected == 0) { displayStatus("Android baseline"); return }
         if (!capability.available) { displayStatus("Android fallback: ${capability.reason}"); return }
         try {
-            val created = HanvonInk.attach(canvas, InkConfig(if (selected == 1) DrawingMode.NATIVE_PREVIEW else DrawingMode.NATIVE_CALLBACK, canvas.widthPx), object : InkListener {
+            val created = HanvonInk.attach(canvas, InkConfig(if (selected == 1) DrawingMode.NATIVE_PREVIEW else DrawingMode.NATIVE_CALLBACK, canvas.widthPx, brush = if (selected == 4) NativeBrush.PRESSURE_PEN else NativeBrush.PENCIL), object : InkListener {
                 override fun onState(state: SessionState, detail: String) {
                     recording.event("sessionState", JSONObject().put("generation", thisGeneration).put("state", state.name).put("detail", detail))
                     if (generation != thisGeneration || destroyed) return
@@ -140,13 +141,18 @@ class MainActivity : Activity() {
                         .put("detail", detail).put("durationNanos", elapsedNanos))
                     android.util.Log.i("HanvonInkLab", "$operation: $detail")
                 }
+                override fun onRenderedPacket(stroke: RenderedStroke, arrivalNanos: Long) {
+                    if (generation == thisGeneration) canvas.receiveNative(stroke, arrivalNanos)
+                }
                 override fun onNativePacket(packet: NativePacket) {
                     if (generation != thisGeneration) return
                     recording.packetCount.incrementAndGet()
-                    val points = JSONArray()
-                    packet.points.forEach { points.put(JSONArray().put(it.x).put(it.y).put(it.renderedWidth)) }
-                    recording.event("nativePacket", JSONObject().put("reportedPenUp", packet.reportedPenUp)
-                        .put("callbackArrivalNanos", packet.arrivalNanos).put("points", points))
+                    recording.deferredEvent("nativePacket") {
+                        val points = JSONArray()
+                        packet.points.forEach { points.put(JSONArray().put(it.x).put(it.y).put(it.renderedWidth)) }
+                        JSONObject().put("reportedPenUp", packet.reportedPenUp)
+                            .put("callbackArrivalNanos", packet.arrivalNanos).put("points", points)
+                    }
                     if (selected == 2) canvas.showPacket(packet)
                 }
             })
